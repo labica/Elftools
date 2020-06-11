@@ -1,4 +1,5 @@
-﻿;;------------------------
+﻿;;----------깃에 올려봄
+;;------------------------
 ;;글로벌 변수
 ;;------------------------
 {
@@ -1478,33 +1479,88 @@ WinMove,ahk_id %id%, , %mX%,%Y%,%w%,%Height%
 
 
 ;;{mainClass:,sideClass,winPosData,w:,is_Active:True,gluePos:,}
-sideKick2(configobj) ;;-------------오브젝트 형태로 데이터 받기
+sideKick2(conf) ;;-------------오브젝트 형태로 데이터 받기
 {
+subData:={x:0,y:0,width:0,height:0} ;메인창
+mainData:={x:0,y:0,width:0,height:0} ;서브창
+calData:={x:0,y:0,width:0,height:0} ;이동할 창
+if (conf.isActive){
+winValue:=WinActive(conf.mainClass)
+} else {
+winValue:=WinExist(conf.mainClass)
+}
 
+;만약 main이랑 side가 동일하면 빠져나오기
 
-;----만약 액티브만 적용 + 현재창이 액티브가 아니면 여기서 리턴.
+winget,mainId,ID,% conf.mainClass
+winget,sideId,ID,% conf.sideClass
 
+;메인창이 있고, 사이드 창이 존재하면
+if (winValue && WinExist(conf.sideClass)) 
+{
+;-------메인창 크기 받아오기
+WinGetPos,x,y,width,height,% conf.mainClass
+mainData:={x:x,y:y,width:width,height:height}
+;-------서브창 크기 받아오기
+WinGetPos,dx,dy,dwidth,dheight,% conf.sideClass
+subData:={x:dx,y:dy,width:dwidth,height:dheight}
+;------받아온 값 전환하기
+;가로세로 퍼센트 기준이면 메인창 크기기반으로 처리. 아니면 그냥입력
+calData.width:= calPercent(mainData.width,conf.width)
+calData.height:= calPercent(mainData.height,conf.height)
+;-------위치계산
+;위치기준이 left면 메인위치 - 창크기 
+if (conf.position="left"){
+	calData.x := mainData.x - calData.width + conf.marginX
+	calData.y := mainData.y + conf.marginY
+}
+if (conf.position="right"){
+	calData.x := mainData.x + mainData.width + conf.marginX
+	calData.y := mainData.y + conf.marginY
+}
+if (conf.position="top"){
+	calData.x := mainData.x + conf.marginX
+	calData.y := mainData.y - calData.height + conf.marginY
+}
+if (conf.position="bottom"){
+	calData.x := mainData.x + conf.marginX
+	calData.y := mainData.y + mainData.height + conf.marginY
+}
 
-
-
-;-----서브창 크기와 위치 받아오기
-
-
-
-
-;-----창 어디에 붙일지 옵션에 따라 창크기 및 위치 계산하기
-
-
+; msgbox % mainData.x . "-" . calData.x
 
 
 ;----붙이기
+winget,windows,List
+loop,%windows%
+{
+id:=windows%A_index%
+WinGetTitle,wt,ahk_id %id% ;창 제목
+wingetpos,x,y,width,height,ahk_id %id% ;창 위치
+winPosDatafromSideClass={x:x,y:y,width:width,height:height} ;실제 위치 추척
+if(instr(wt,conf.sideClass) && calData!=winPosDatafromSideClass && id!=mainId)
+WinMove,ahk_id %id%, , % calData.x,% caldata.y,% calData.width,% calData.height
+}
 
-
-
-	return configobj
 }
 
 
+
+
+
+	return conf
+}
+
+calPercent(data,str){
+
+
+if (instr(str,"%")){
+stringtrimright,result,str,1
+return result:=floor(result/100*data)
+}
+
+	return str
+}
 
 
 
@@ -1736,3 +1792,49 @@ RestoreCursors()
 	SPI_SETCURSORS := 0x57
 	DllCall( "SystemParametersInfo", UInt,SPI_SETCURSORS, UInt,0, UInt,0, UInt,0 )
 }
+
+
+RelativePath(MasterPath, SlavePath, s="\"){
+    len := InStr(MasterPath, s, "", InStr(MasterPath, s . s) + 2) ;get server or drive string length
+    If SubStr(MasterPath, 1, len ) <> SubStr(SlavePath, 1, len )  ;different server or drive
+        Return SlavePath                                              ;return absolut path
+    MasterPath := SubStr(MasterPath, len + 1 )                    ;remove server or drive from MasterPath
+    SlavePath := SubStr(SlavePath, len + 1 )                      ;remove server or drive from SlavePath
+    If InStr(MasterPath, s, "", 0) = StrLen(MasterPath)           ;remove last \ from MasterPath if any
+        StringTrimRight, MasterPath, MasterPath, 1
+    If InStr(SlavePath, s, "", 0) = StrLen(SlavePath)             ;remove last \ from SlavePath if any
+        StringTrimRight, SlavePath, SlavePath, 1
+    Loop{
+        If !MasterPath                                            ;when there is nothing didentical
+            Return s SlavePath                                         ;return SlavePath in root
+        If InStr(SlavePath s, MasterPath s){                      ;when parts of paths match
+            If !r                                                      ;no relative part yet
+                r = .%s%                                                   ;SlavePath is in the MasterPath
+            Return r . SubStr(SlavePath,StrLen(MasterPath) + 2)        ;return relative path
+        }Else{                                                    ;otherwise
+            r .= ".." s                                                ;add relative part
+            MasterPath := SubStr(MasterPath, 1, InStr(MasterPath, s, "", 0) - 1)   ;remove one folder from MasterPath
+          }
+      }
+  }
+
+
+AbsolutePath(AbsolutPath, RelativePath, s="\") {
+    len := InStr(AbsolutPath, s, "", InStr(AbsolutPath, s . s) + 2) - 1   ;get server or drive string length
+    pr := SubStr(AbsolutPath, 1, len)                                     ;get server or drive name
+    AbsolutPath := SubStr(AbsolutPath, len + 1)                           ;remove server or drive from AbsolutPath
+    If InStr(AbsolutPath, s, "", 0) = StrLen(AbsolutPath)                 ;remove last \ from AbsolutPath if any
+        StringTrimRight, AbsolutPath, AbsolutPath, 1
+    If InStr(RelativePath, s, "", 0) = StrLen(RelativePath)               ;remove last \ from RelativePath if any
+        StringTrimRight, RelativePath, RelativePath, 1
+    If InStr(RelativePath, s) = 1                                         ;when first char is \ go to AbsolutPath of server or drive
+        AbsolutPath := "", RelativePath := SubStr(RelativePath, 2)            ;set AbsolutPath to nothing and remove one char from RelativePath
+    Else If InStr(RelativePath,"." s) = 1                                 ;when first two chars are .\ add to current AbsolutPath directory
+        RelativePath := SubStr(RelativePath, 3)                               ;remove two chars from RelativePath
+    Else {                                                                ;otherwise
+        StringReplace, RelativePath, RelativePath, ..%s%, , UseErrorLevel     ;remove all ..\ from RelativePath
+        Loop, %ErrorLevel%                                                    ;for all ..\
+            AbsolutPath := SubStr(AbsolutPath, 1, InStr(AbsolutPath, s, "", 0) - 1)  ;remove one folder from AbsolutPath
+      }
+    Return, pr . AbsolutPath . s . RelativePath                             ;concatenate server + AbsolutPath + separator + RelativePath
+  }
